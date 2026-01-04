@@ -7,29 +7,43 @@ import config
 import utils
 import aes
 
-def add_credential(platform, qr_path, key):
-    if not os.path.exists(qr_path):
-        return False, "File not found"
-    
-    with open(qr_path, 'rb') as f:
-        original_data = f.read()
-    
-    uri = utils.read_qr_from_bytes(original_data)
-    if not uri:
-        return False, "Could not read QR code from image"
-    
+import pyotp
+
+def add_credential(platform, username=None, secret=None, qr_path=None, key=None):
     crypto = aes.Crypto(key)
-    qr_folder = os.path.join(config.APP_FOLDER, "qrs")
-    os.makedirs(qr_folder, exist_ok=True)
+    uri = None
+    enc_img_path = "NONE"
+
+    if qr_path and os.path.exists(qr_path):
+        with open(qr_path, 'rb') as f:
+            original_data = f.read()
+        
+        uri = utils.read_qr_from_bytes(original_data)
+        if not uri:
+            return False, "Could not read QR code from image"
+        
+        qr_folder = os.path.join(config.APP_FOLDER, "qrs")
+        os.makedirs(qr_folder, exist_ok=True)
+        
+        enc_img_data = crypto.encrypt_bytes(original_data)
+        safe_name = hashlib.md5(f"{platform}{time.time()}".encode()).hexdigest()
+        enc_img_path = os.path.join(qr_folder, f"{safe_name}.enc")
+        
+        with open(enc_img_path, 'wb') as f:
+            f.write(enc_img_data)
+    elif secret and username:
+        try:
+            # Clean secret (remove spaces)
+            secret = secret.replace(" ", "").upper()
+            # Test if secret is valid base32
+            pyotp.TOTP(secret).now()
+            uri = pyotp.totp.TOTP(secret).provisioning_uri(name=username, issuer_name=platform)
+        except Exception:
+            return False, "Invalid secret key (must be base32)"
+    else:
+        return False, "Provide either a QR code or Secret Key + Username"
     
-    enc_img_data = crypto.encrypt_bytes(original_data)
-    safe_name = hashlib.md5(f"{platform}{time.time()}".encode()).hexdigest()
-    enc_img_path = os.path.join(qr_folder, f"{safe_name}.enc")
-    
-    with open(enc_img_path, 'wb') as f:
-        f.write(enc_img_data)
-    
-    line_to_encrypt = f"{platform}: {enc_img_path}"
+    line_to_encrypt = f"{platform}|{uri}|{enc_img_path}"
     encrypted_line = crypto.encrypt_aes(line_to_encrypt)
     
     with open(config.ENCODED_FILE, 'a') as f:
@@ -39,6 +53,7 @@ def add_credential(platform, qr_path, key):
 
 def edit_credentials_popup(parent, root, build_main_ui_callback):
     parent.resizable(False, False)
+    parent.geometry("370x450")
     frame = tk.Frame(parent, bg="#1e1e1e")
     frame.pack(expand=True, fill="both", padx=20, pady=20)
     
@@ -47,8 +62,16 @@ def edit_credentials_popup(parent, root, build_main_ui_callback):
     tk.Label(frame, text="Platform Name:", bg="#1e1e1e", fg="white").pack(anchor="w")
     platform_entry = tk.Entry(frame, font=("Segoe UI", 10))
     platform_entry.pack(fill="x", pady=(0, 10))
+
+    tk.Label(frame, text="Username (for manual entry):", bg="#1e1e1e", fg="white").pack(anchor="w")
+    user_entry = tk.Entry(frame, font=("Segoe UI", 10))
+    user_entry.pack(fill="x", pady=(0, 10))
+
+    tk.Label(frame, text="Secret Key (for manual entry):", bg="#1e1e1e", fg="white").pack(anchor="w")
+    secret_entry = tk.Entry(frame, font=("Segoe UI", 10))
+    secret_entry.pack(fill="x", pady=(0, 10))
     
-    tk.Label(frame, text="QR Code Image:", bg="#1e1e1e", fg="white").pack(anchor="w")
+    tk.Label(frame, text="OR QR Code Image:", bg="#1e1e1e", fg="white").pack(anchor="w")
     path_frame = tk.Frame(frame, bg="#1e1e1e")
     path_frame.pack(fill="x")
     
@@ -68,12 +91,15 @@ def edit_credentials_popup(parent, root, build_main_ui_callback):
     
     def save_cred():
         platform = platform_entry.get().strip()
+        username = user_entry.get().strip()
+        secret = secret_entry.get().strip()
         path = path_entry.get().strip()
-        if not platform or not path:
-            error_label.config(text="Please fill all fields")
+        
+        if not platform:
+            error_label.config(text="Platform name is required")
             return
         
-        success, msg = add_credential(platform, path, config.decrypt_key)
+        success, msg = add_credential(platform, username, secret, path, config.decrypt_key)
         if success:
             parent.destroy()
             new_entries = utils.load_otps_from_decrypted(utils.decode_encrypted_file())
@@ -82,3 +108,4 @@ def edit_credentials_popup(parent, root, build_main_ui_callback):
             error_label.config(text=msg)
             
     tk.Button(frame, text="Save Credential", command=save_cred, bg="#444", fg="white", relief="flat", font=("Segoe UI", 10, "bold")).pack(pady=10)
+

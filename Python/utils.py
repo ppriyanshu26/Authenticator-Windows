@@ -67,16 +67,21 @@ def decode_encrypted_file():
                 if not line: continue
                 try:
                     decrypted_line = crypto.decrypt_aes(line)
-                    if ': ' not in decrypted_line: continue
-                    platform, enc_img_path = decrypted_line.split(': ', 1)
-                    
-                    if os.path.exists(enc_img_path):
-                        with open(enc_img_path, 'rb') as f:
-                            enc_data = f.read()
-                        img_bytes = crypto.decrypt_bytes(enc_data)
-                        uri = read_qr_from_bytes(img_bytes)
-                        if uri:
+                    if '|' in decrypted_line:
+                        parts = decrypted_line.split('|')
+                        if len(parts) == 3:
+                            platform, uri, enc_img_path = parts
                             decrypted_otps.append((platform, uri, enc_img_path))
+                    elif ': ' in decrypted_line:
+                        platform, enc_img_path = decrypted_line.split(': ', 1)
+                        
+                        if os.path.exists(enc_img_path):
+                            with open(enc_img_path, 'rb') as f:
+                                enc_data = f.read()
+                            img_bytes = crypto.decrypt_bytes(enc_data)
+                            uri = read_qr_from_bytes(img_bytes)
+                            if uri:
+                                decrypted_otps.append((platform, uri, enc_img_path))
                 except Exception:
                     continue
     except FileNotFoundError: pass
@@ -97,7 +102,7 @@ def get_qr_image(enc_img_path, key, blur=True):
     except Exception:
         return None
 
-def delete_credential(enc_img_path_to_delete, key):
+def delete_credential(platform_to_delete, uri_to_delete, key):
     if not os.path.exists(config.ENCODED_FILE):
         return False
     
@@ -114,11 +119,22 @@ def delete_credential(enc_img_path_to_delete, key):
             if not line: continue
             
             decrypted_line = crypto.decrypt_aes(line)
-            if ': ' not in decrypted_line: continue
-            platform, enc_img_path = decrypted_line.split(': ', 1)
-            
-            if enc_img_path == enc_img_path_to_delete:
-                if os.path.exists(enc_img_path):
+            platform, uri, enc_img_path = None, None, None
+
+            if '|' in decrypted_line:
+                parts = decrypted_line.split('|')
+                if len(parts) == 3:
+                    platform, uri, enc_img_path = parts
+            elif ': ' in decrypted_line:
+                platform, enc_img_path = decrypted_line.split(': ', 1)
+                # For legacy, we might need to read the URI to match, 
+                # but usually platform + path is enough.
+                if enc_img_path == uri_to_delete: # In legacy, we passed path as 2nd arg
+                     uri = uri_to_delete 
+
+            # Match by platform and uri (or path for legacy)
+            if platform == platform_to_delete and (uri == uri_to_delete or enc_img_path == uri_to_delete):
+                if enc_img_path and enc_img_path != "NONE" and os.path.exists(enc_img_path):
                     os.remove(enc_img_path)
                 deleted = True
                 continue
