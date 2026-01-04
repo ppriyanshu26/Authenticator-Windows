@@ -1,5 +1,5 @@
 import tkinter as tk
-from tkinter import filedialog
+from tkinter import filedialog, messagebox
 import pyotp
 import time
 import hashlib
@@ -175,31 +175,31 @@ def build_main_ui(root, otp_entries):
             header = tk.Frame(card, bg="#2b2b2b")
             header.pack(fill="x")
 
-            tk.Label(header, text=display_name, font=("Segoe UI", 12, "bold"),
-                     bg="#2b2b2b", fg="#ffffff", anchor="w").pack(side="left")
-            
-            qr_toggle_btn = tk.Button(header, text="View QR", font=("Segoe UI", 8),
-                                     bg="#444", fg="white", relief="flat", padx=5)
+            tk.Label(header, text=display_name, font=("Segoe UI", 12, "bold"),bg="#2b2b2b", fg="#ffffff", anchor="w").pack(side="left")
+            delete_btn = tk.Button(header, text="Delete", font=("Segoe UI", 8), bg="#2b2b2b", fg="#ff4d4d", relief="flat", padx=5, activebackground="#3d3d3d", activeforeground="#ff4d4d")
+            delete_btn.pack(side="right", padx=(5, 0))
+            qr_toggle_btn = tk.Button(header, text="View QR", font=("Segoe UI", 8), bg="#444", fg="white", relief="flat", padx=5)
             qr_toggle_btn.pack(side="right")
 
-            tk.Label(card, text=username, font=("Segoe UI", 9),
-                     fg="#aaaaaa", bg="#2b2b2b", anchor="w").pack(fill="x")
+            def confirm_delete(p=display_name, path=enc_img_path):
+                if messagebox.askyesno("Delete Credential", f"Are you sure you want to delete '{p}'?"):
+                    if utils.delete_credential(path, config.decrypt_key):
+                        new_entries = utils.load_otps_from_decrypted(utils.decode_encrypted_file())
+                        build_main_ui(root, new_entries)
+                    else:
+                        messagebox.showerror("Error", "Failed to delete credential")
 
+            delete_btn.config(command=confirm_delete)
+            tk.Label(card, text=username, font=("Segoe UI", 9),fg="#aaaaaa", bg="#2b2b2b", anchor="w").pack(fill="x")
             bottom = tk.Frame(card, bg="#2b2b2b")
             bottom.pack(fill="x", pady=(8, 0))
-
             code_var = tk.StringVar()
-            tk.Label(bottom, textvariable=code_var, font=("Courier", 16, "bold"),
-                     bg="#2b2b2b", fg="#00ffcc").pack(side="left")
-
+            tk.Label(bottom, textvariable=code_var, font=("Courier", 16, "bold"), bg="#2b2b2b", fg="#00ffcc").pack(side="left")
             time_var = tk.StringVar()
-            time_label = tk.Label(bottom, textvariable=time_var, font=("Segoe UI", 10, "bold"),
-                                  bg="#2b2b2b", fg="#00ffcc")
+            time_label = tk.Label(bottom, textvariable=time_var, font=("Segoe UI", 10, "bold"), bg="#2b2b2b", fg="#00ffcc")
             time_label.pack(side="left", padx=(10, 0))
 
-            tk.Button(bottom, text="Copy", font=("Segoe UI", 9),
-                      bg="#444", fg="white", activebackground="#666", relief="flat",
-                      command=lambda v=code_var: utils.copy_and_toast(v, root)).pack(side="right")
+            tk.Button(bottom, text="Copy", font=("Segoe UI", 9), bg="#444", fg="white", activebackground="#666", relief="flat", command=lambda v=code_var: utils.copy_and_toast(v, root)).pack(side="right")
 
             qr_frame = tk.Frame(card, bg="#2b2b2b")
             
@@ -236,12 +236,7 @@ def build_main_ui(root, otp_entries):
                     label.config(image=img_tk)
                     label.image = img_tk
 
-            config.frames.append({
-                "totp": totp_obj,
-                "code_var": code_var,
-                "time_var": time_var,
-                "time_label": time_label
-            })
+            config.frames.append({"totp": totp_obj, "code_var": code_var, "time_var": time_var, "time_label": time_label})
 
     footer = tk.Frame(outer_frame, bg="#1e1e1e")
     footer.pack(side="bottom", fill="x")
@@ -314,7 +309,7 @@ def build_lock_screen(root, otp_entries):
 
 if __name__ == "__main__":
     root = tk.Tk()
-    root.title("TOTP Authenticator v2.0.0")
+    root.title("TOTP Authenticator v3.0.0")
     root.geometry("420x500")
     root.configure(bg="#1e1e1e")
     root.resizable(False, False)

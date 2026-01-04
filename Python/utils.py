@@ -162,6 +162,45 @@ def reencrypt_all_data(old_key, new_key):
         print(f"Re-encryption failed: {e}")
         return False
 
+def delete_credential(enc_img_path_to_delete, key):
+    if not os.path.exists(config.ENCODED_FILE):
+        return False
+    
+    crypto = aes.Crypto(key)
+    new_lines = []
+    deleted = False
+    
+    try:
+        with open(config.ENCODED_FILE, 'r') as f:
+            lines = f.readlines()
+            
+        for line in lines:
+            line = line.strip()
+            if not line: continue
+            
+            decrypted_line = crypto.decrypt_aes(line)
+            if ': ' not in decrypted_line: continue
+            platform, enc_img_path = decrypted_line.split(': ', 1)
+            
+            if enc_img_path == enc_img_path_to_delete:
+                # Delete the encrypted image file
+                if os.path.exists(enc_img_path):
+                    os.remove(enc_img_path)
+                deleted = True
+                continue # Skip adding this line to new_lines
+            
+            new_lines.append(line)
+            
+        if deleted:
+            with open(config.ENCODED_FILE, 'w') as f:
+                for nl in new_lines:
+                    f.write(nl + "\n")
+            return True
+    except Exception as e:
+        print(f"Deletion failed: {e}")
+        
+    return False
+
 def bind_enter(root, button):
     root.unbind_all("<Return>")
     root.bind_all("<Return>", lambda event: button.invoke())
