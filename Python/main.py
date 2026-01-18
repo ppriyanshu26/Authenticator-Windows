@@ -82,12 +82,7 @@ def render_otp_list(root, otp_entries, query=""):
                 qr_toggle_btn.pack(side="right")
 
             def confirm_delete(p=display_name, u=uri, path=enc_img_path):
-                if messagebox.askyesno("Delete Credential", f"Are you sure you want to delete '{p}'?"):
-                    if utils.delete_credential(p, u, config.decrypt_key, path):
-                        otp_entries[:] = utils.load_otps_from_decrypted(utils.decode_encrypted_file())
-                        render_otp_list(root, otp_entries)
-                    else:
-                        messagebox.showerror("Error", "Failed to delete credential")
+                creds_handler.show_delete_confirmation_screen(root, p, u, path, otp_entries, build_main_ui)
 
             delete_btn.configure(command=confirm_delete)
             ctk.CTkLabel(card, text=username, font=("Segoe UI", 11), text_color="#aaaaaa", anchor="w").pack(fill="x", padx=10)
