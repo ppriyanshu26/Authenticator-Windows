@@ -1,23 +1,17 @@
 import tkinter as tk
 from tkinter import messagebox
 import customtkinter as ctk
-import pyotp
-import time
-import hashlib
-import ctypes
-import config
-import utils
-import reset_handler
-import creds_handler
-import export_handler
+import pyotp, sys, time, hashlib, ctypes, config
+import utils, reset_handler, creds_handler, export_handler
 
-try:
-    ctypes.windll.shcore.SetProcessDpiAwareness(1)
-except Exception:
+if sys.platform == "win32":
     try:
-        ctypes.windll.user32.SetProcessDPIAware()
+        ctypes.windll.shcore.SetProcessDpiAwareness(1)
     except Exception:
-        pass
+        try:
+            ctypes.windll.user32.SetProcessDPIAware()
+        except Exception:
+            pass
 
 ctk.set_appearance_mode("dark")
 ctk.set_default_color_theme("blue")

@@ -1,10 +1,5 @@
-import tkinter as tk
 import customtkinter as ctk
-import hashlib
-import os
-import config
-import utils
-import aes
+import hashlib, os, config, utils, aes
 
 def reencrypt_all_data(old_key, new_key):
     if not os.path.exists(config.ENCODED_FILE):
@@ -49,8 +44,7 @@ def reencrypt_all_data(old_key, new_key):
                         raw_img_data = old_crypto.decrypt_bytes(old_enc_data)
                         uri = utils.read_qr_from_bytes(raw_img_data)
                     except Exception as e:
-                        print(f"Warning: Failed to recover URI from legacy image {enc_img_path}: {e}")
-                        print(f"Warning: Failed to recover URI from legacy image {enc_img_path}: {e}")
+                        pass
             
             if not platform:
                 continue

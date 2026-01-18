@@ -1,16 +1,8 @@
-import tkinter as tk
 import customtkinter as ctk
-import pyperclip
+import pyperclip, os, hashlib, config, cv2, aes, io
 from urllib.parse import urlparse, parse_qs, urlencode, urlunparse, unquote
-import os
-import hashlib
-import keyring
-import config
-import cv2
 import numpy as np
-import aes
-from PIL import Image, ImageTk, ImageFilter
-import io
+from PIL import Image, ImageFilter
 
 def read_qr_from_bytes(image_bytes):
     try:
@@ -52,10 +44,25 @@ def copy_and_toast(var, root):
 
 def save_password(password):
     hashed = hashlib.sha256(password.encode()).hexdigest()
-    keyring.set_password(config.SERVICE_NAME, config.USERNAME, hashed)
+    pw_path = os.path.join(config.APP_FOLDER, "password.hash")
+    try:
+        with open(pw_path, "w") as f:
+            f.write(hashed)
+        try:
+            os.chmod(pw_path, 0o600)
+        except Exception:
+            pass
+        return True
+    except Exception:
+        return False
 
 def get_stored_password():
-    return keyring.get_password(config.SERVICE_NAME, config.USERNAME)
+    pw_path = os.path.join(config.APP_FOLDER, "password.hash")
+    try:
+        with open(pw_path, "r") as f:
+            return f.read().strip()
+    except Exception:
+        return None
 
 def decode_encrypted_file():
     if not config.decrypt_key: return []

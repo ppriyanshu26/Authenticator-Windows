@@ -1,8 +1,5 @@
-import os
-import csv
+import os, csv, utils
 from tkinter import messagebox
-import config
-import utils
 
 def export_to_csv():
     otps = utils.decode_encrypted_file()
@@ -10,8 +7,8 @@ def export_to_csv():
         return False, "No data to export"
     
     try:
-        desktop = os.path.join(os.path.join(os.environ['USERPROFILE']), 'Desktop')
-        filepath = os.path.join(desktop, "TOTP_Backup.csv")
+        desktop = os.path.expanduser("~/Desktop")
+        filepath = os.path.join(desktop, "CipherAuth.csv")
         
         with open(filepath, 'w', newline='', encoding='utf-8') as f:
             writer = csv.writer(f)

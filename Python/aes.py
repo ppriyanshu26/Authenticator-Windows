@@ -1,6 +1,4 @@
-import hashlib
-import base64
-import os
+import hashlib, base64, os
 from cryptography.hazmat.primitives.ciphers.aead import AESGCM
 
 class Crypto:

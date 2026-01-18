@@ -1,16 +1,7 @@
 import tkinter as tk
 from tkinter import filedialog
 import customtkinter as ctk
-import os
-import time
-import hashlib
-import config
-import utils
-import aes
-import qrcode
-import io
-
-import pyotp
+import os, time, hashlib, config, utils, aes, qrcode, io, pyotp
 
 def add_credential(platform, username=None, secret=None, qr_path=None, key=None):
     crypto = aes.Crypto(key)
