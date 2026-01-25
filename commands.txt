@@ -1,0 +1,9 @@
+Command to make exe
+pyinstaller --clean --noconfirm CipherAuth.spec
+
+Command to copy exe from dist to AppPackage
+Copy-Item -Path .\dist\CipherAuth\* -Destination .\AppPackage\ -Recurse -Force
+
+Command to make msix
+& "C:\Program Files (x86)\Windows Kits\10\bin\10.0.26100.0\x64\makeappx.exe" pack /d .\AppPackage /p .\CipherAuth.msix
+Add-AppxPackage -Path .\CipherAuth.msix
