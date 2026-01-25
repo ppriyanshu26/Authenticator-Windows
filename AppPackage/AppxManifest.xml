@@ -6,7 +6,7 @@
 
   <Identity Name="PriyanshuPriyam.CipherAuth" 
             Publisher="CN=535EC210-8E79-4123-A1BC-3B69A02701C8" 
-            Version="4.0.0.0" 
+            Version="4.0.1.0" 
             ProcessorArchitecture="x64" />
 
   <Properties>
