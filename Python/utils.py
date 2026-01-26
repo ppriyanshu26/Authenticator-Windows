@@ -6,188 +6,131 @@ from PIL import Image, ImageFilter
 
 def read_qr_from_bytes(image_bytes):
     try:
-        nparr = np.frombuffer(image_bytes, np.uint8)
-        img = cv2.imdecode(nparr, cv2.IMREAD_COLOR)
-        if img is None:
-            return None
-        detector = cv2.QRCodeDetector()
-        data, _, _ = detector.detectAndDecode(img)
+        img = cv2.imdecode(np.frombuffer(image_bytes, np.uint8), cv2.IMREAD_COLOR)
+        if img is None: return None
+        data, _, _ = cv2.QRCodeDetector().detectAndDecode(img)
         return data
-    except Exception as e:
-        return None
+    except: return None
 
-def load_otps_from_decrypted(decrypted_otps):
-    return sorted(decrypted_otps, key=lambda x: x.get('platform', '').lower())
+def load_otps_from_decrypted(otps):
+    return sorted(otps, key=lambda x: x.get('platform', '').lower())
 
 def clean_uri(uri):
-    if not uri or "otpauth://" not in uri:
-        return "", "", ""
+    if not uri or "otpauth://" not in uri: return "", "", ""
     parsed = urlparse(uri)
     query = parse_qs(parsed.query)
-    label = unquote(parsed.path.split('/')[-1])
-    if ':' in label:
-        label_issuer, username = label.split(':', 1)
-    else:
-        label_issuer = username = label
-    query_issuer = query.get("issuer", [label_issuer])[0]
-    if label_issuer != query_issuer:
+    label_issuer, _, username = (lambda l: (l.split(':')[0], None, l.split(':')[1]) if ':' in l else (l, None, l))(unquote(parsed.path.split('/')[-1]))
+    if label_issuer != (qi := query.get("issuer", [label_issuer])[0]):
         query['issuer'] = [label_issuer]
-    parsed = parsed._replace(query=urlencode(query, doseq=True))
-    return urlunparse(parsed), label_issuer, username
+    return urlunparse(parsed._replace(query=urlencode(query, doseq=True))), label_issuer, username
 
 def generate_id(platform, secret, salt=None):
-    if salt is None:
-        salt = str(time.time())
-    combo = f"{platform}{secret}{salt}"
-    return hashlib.sha256(combo.encode()).hexdigest()
+    salt = salt or str(time.time())
+    return hashlib.sha256(f"{platform}{secret}{salt}".encode()).hexdigest()
 
 def save_otps_encrypted(otp_list, key):
-    crypto = aes.Crypto(key)
-    json_data = json.dumps(otp_list)
-    encrypted_data = crypto.encrypt_aes(json_data)
+    encrypted = aes.Crypto(key).encrypt_aes(json.dumps(otp_list))
     with open(config.ENCODED_FILE, 'w') as f:
-        f.write(encrypted_data)
+        f.write(encrypted)
 
 def decode_encrypted_file():
-    if not config.decrypt_key: return []
-    if not os.path.exists(config.ENCODED_FILE): return []
-    
+    if not config.decrypt_key or not os.path.exists(config.ENCODED_FILE): return []
     crypto = aes.Crypto(config.decrypt_key)
     try:
-        with open(config.ENCODED_FILE, 'r') as infile:
-            content = infile.read().strip()
-            if not content: return []
-            
-            try:
-                decrypted_content = crypto.decrypt_aes(content)
-                data = json.loads(decrypted_content)
-                if isinstance(data, list):
-                    return data
-            except Exception:
-                return [] 
-    except Exception:
-        return []
+        with open(config.ENCODED_FILE, 'r') as f:
+            if (content := f.read().strip()):
+                data = json.loads(crypto.decrypt_aes(content))
+                return data if isinstance(data, list) else []
+    except: pass
     return []
 
 def extract_secret_from_uri(uri):
     try:
-        parsed = urlparse(uri)
-        query = parse_qs(parsed.query)
-        return query.get('secret', [None])[0]
-    except Exception:
-        return None
+        return parse_qs(urlparse(uri).query).get('secret', [None])[0]
+    except: return None
 
 def load_image_paths():
-    if not os.path.exists(config.IMAGE_PATH_FILE):
-        return {}
+    if not os.path.exists(config.IMAGE_PATH_FILE): return {}
     try:
         with open(config.IMAGE_PATH_FILE, 'r') as f:
-            content = f.read().strip()
-            if not content:
-                return {}
-            return json.loads(content)
-    except Exception:
-        return {}
+            return json.loads(content) if (content := f.read().strip()) else {}
+    except: return {}
 
 def save_image_path(cred_id, enc_img_path):
-    image_paths = load_image_paths()
-    image_paths[cred_id] = enc_img_path
     try:
+        paths = load_image_paths()
+        paths[cred_id] = enc_img_path
         with open(config.IMAGE_PATH_FILE, 'w') as f:
-            f.write(json.dumps(image_paths))
+            f.write(json.dumps(paths))
         return True
-    except Exception:
-        return False
+    except: return False
 
 def get_image_path(cred_id):
-    image_paths = load_image_paths()
-    return image_paths.get(cred_id)
+    return load_image_paths().get(cred_id)
 
 def delete_image_path(cred_id):
-    image_paths = load_image_paths()
-    if cred_id in image_paths:
-        del image_paths[cred_id]
-        try:
+    try:
+        paths = load_image_paths()
+        if cred_id in paths:
+            del paths[cred_id]
             with open(config.IMAGE_PATH_FILE, 'w') as f:
-                f.write(json.dumps(image_paths))
-            return True
-        except Exception:
-            return False
+                f.write(json.dumps(paths))
+    except: pass
     return True
 
 def get_qr_image(cred_id, key, blur=True):
     enc_img_path = get_image_path(cred_id)
-    if not enc_img_path or not os.path.exists(enc_img_path):
-        return None
-    crypto = aes.Crypto(key)
+    if not enc_img_path or not os.path.exists(enc_img_path): return None
     try:
-        with open(enc_img_path, 'rb') as f:
-            enc_data = f.read()
-        img_bytes = crypto.decrypt_bytes(enc_data)
+        img_bytes = aes.Crypto(key).decrypt_bytes(open(enc_img_path, 'rb').read())
         img = Image.open(io.BytesIO(img_bytes))
-        if img.mode != "RGBA":
-            img = img.convert("RGBA")
+        if img.mode != "RGBA": img = img.convert("RGBA")
         img = img.resize((200, 200), Image.Resampling.LANCZOS)
-        if blur:
-            img = img.filter(ImageFilter.GaussianBlur(radius=15))
-        return img
-    except Exception:
-        return None
+        return img.filter(ImageFilter.GaussianBlur(radius=15)) if blur else img
+    except: return None
 
 def save_password(password):
-    hashed = hashlib.sha256(password.encode()).hexdigest()
-    pw_path = os.path.join(config.APP_FOLDER, "password.hash")
     try:
-        with open(pw_path, "w") as f:
-            f.write(hashed)
-        try:
-            os.chmod(pw_path, 0o600)
-        except Exception:
-            pass
+        hashed = hashlib.sha256(password.encode()).hexdigest()
+        pw_path = os.path.join(config.APP_FOLDER, "password.hash")
+        with open(pw_path, "w") as f: f.write(hashed)
+        try: os.chmod(pw_path, 0o600)
+        except: pass
         return True
-    except Exception:
-        return False
+    except: return False
 
 def get_stored_password():
-    pw_path = os.path.join(config.APP_FOLDER, "password.hash")
     try:
-        with open(pw_path, "r") as f:
-            return f.read().strip()
-    except Exception:
-        return None
+        return open(os.path.join(config.APP_FOLDER, "password.hash"), "r").read().strip()
+    except: return None
 
 def delete_credential(cred_id, key):
     otps = decode_encrypted_file()
-    new_otps = []
-    deleted = False
+    if not any(c['id'] == cred_id for c in otps): return False
     
-    for cred in otps:
-        if cred.get('id') == cred_id:
-            enc_img_path = get_image_path(cred_id)
-            if enc_img_path and os.path.exists(enc_img_path):
-                try:
-                    os.remove(enc_img_path)
-                except Exception:
-                    pass
-            delete_image_path(cred_id)
-            deleted = True
-            continue
-        new_otps.append(cred)
-        
-    if deleted:
-        save_otps_encrypted(new_otps, key)
-        return True
-    return False
+    enc_img_path = get_image_path(cred_id)
+    if enc_img_path and os.path.exists(enc_img_path):
+        try: os.remove(enc_img_path)
+        except: pass
+    delete_image_path(cred_id)
+    
+    save_otps_encrypted([c for c in otps if c['id'] != cred_id], key)
+    return True
 
 def bind_enter(root, button):
     root.unbind_all("<Return>")
-    root.bind_all("<Return>", lambda event: button.invoke())
-def truncate_platform_name(name, max_length=20):
-    if len(name) > max_length:
-        return name[:max_length] + "..."
-    return name
+    root.bind_all("<Return>", lambda _: button.invoke())
 
-def truncate_username(username, max_length=35):
-    if len(username) > max_length:
-        return username[:max_length] + "..."
-    return username
+def truncate(text, max_len, suffix="..."):
+    return f"{text[:max_len]}{suffix}" if len(text) > max_len else text
+
+# Legacy aliases for backward compatibility
+def copy_and_toast(var, root):
+    pyperclip.copy(var.get())
+    if config.toast_label: config.toast_label.destroy()
+    config.toast_label = ctk.CTkLabel(root, text="✅ Copied to clipboard", fg_color="#22cc22", text_color="white", font=("Segoe UI", 12), corner_radius=8, padx=12, pady=6)
+    config.toast_label.place(relx=0.5, rely=0.9, anchor='s')
+    root.after(1500, lambda: config.toast_label.destroy() if config.toast_label else None)
+
+truncate_platform_name = lambda name: truncate(name, 20)
+truncate_username = lambda username: truncate(username, 35)
